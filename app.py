@@ -1,8 +1,9 @@
 import streamlit as st
 import torch
-from sentiment_model import SentimentAnalyzer, safe_load_model
+from sentiment_model import SentimentAnalyzer
 import time
 import os
+import pandas as pd
 
 # Set page configuration
 st.set_page_config(
@@ -11,57 +12,13 @@ st.set_page_config(
     layout="wide"
 )
 
-# Initialize the model with better error handling
+# Initialize the model
 @st.cache_resource
 def load_model():
-    # Replace with your actual GitHub releases URL
-    GITHUB_MODEL_URL = "https://github.com/Abdulbaset1/Customer-Feedback-Classification-Model/releases/tag/v1/sentiment_bestmodel.pt"
+    # Use the correct GitHub releases URL format
+    GITHUB_MODEL_URL = "https://github.com/Abdulbaset1/Customer-Feedback-Classification-Model/releases/download/v1/sentiment_bestmodel.pt"
     
-    try:
-        # Try the main approach first
-        return SentimentAnalyzer(model_url=GITHUB_MODEL_URL, model_path="sentiment_bestmodel.pt")
-    except Exception as e:
-        st.error(f"Standard loading failed: {e}")
-        st.info("Trying alternative loading method...")
-        
-        # Fallback to safe loading
-        try:
-            model, tokenizer, device = safe_load_model(
-                "sentiment_bestmodel.pt", 
-                GITHUB_MODEL_URL
-            )
-            
-            # Create a custom analyzer instance
-            class FallbackAnalyzer:
-                def __init__(self, model, tokenizer, device):
-                    self.model = model
-                    self.tokenizer = tokenizer
-                    self.device = device
-                    self.label_map = {0: "negative", 1: "neutral", 2: "positive"}
-                
-                def predict(self, text):
-                    inputs = self.tokenizer(
-                        text,
-                        truncation=True,
-                        padding=True,
-                        max_length=128,
-                        return_tensors="pt"
-                    )
-                    
-                    inputs = {key: value.to(self.device) for key, value in inputs.items()}
-                    
-                    with torch.no_grad():
-                        outputs = self.model(**inputs)
-                        predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
-                    
-                    confidence, predicted_class = torch.max(predictions, dim=1)
-                    return self.label_map[predicted_class.item()], confidence.item()
-            
-            return FallbackAnalyzer(model, tokenizer, device)
-            
-        except Exception as fallback_error:
-            st.error(f"All loading methods failed: {fallback_error}")
-            raise fallback_error
+    return SentimentAnalyzer(model_url=GITHUB_MODEL_URL, model_path="sentiment_bestmodel.pt")
 
 def main():
     st.title("📊 Sentiment Analysis App")
@@ -70,16 +27,9 @@ def main():
     # Model loading section
     st.sidebar.header("Model Configuration")
     
-    # Option to input custom GitHub URL
-    github_url = st.sidebar.text_input(
-        "GitHub Model URL:",
-        value="https://github.com/your-username/your-repo/releases/download/v1/sentiment_bestmodel.pt",
-        help="Paste the direct download URL from your GitHub releases"
-    )
-    
     # Load model
     try:
-        with st.spinner("🔄 Loading model (PyTorch 2.6 compatibility mode)..."):
+        with st.spinner("🔄 Loading model..."):
             analyzer = load_model()
         
         st.success("✅ Model loaded successfully!")
@@ -94,24 +44,15 @@ def main():
         # Detailed troubleshooting
         st.subheader("🔧 Troubleshooting Steps")
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("""
-            **Option 1: Update Model File**
-            - Re-save your model with PyTorch 2.6+
-            - Use `torch.save(model.state_dict(), 'model.pt', weights_only=True)`
-            """)
-            
-        with col2:
-            st.markdown("""
-            **Option 2: Manual Upload**
-            - Upload the model file directly
-            - Ensure it's from a trusted source
-            """)
+        st.markdown("""
+        **Common Issues:**
+        1. **Incorrect GitHub URL**: Make sure the model file exists in your releases
+        2. **Network issues**: Check your internet connection
+        3. **Model file format**: Ensure the model file is compatible with PyTorch 2.9
+        """)
         
         # Manual upload fallback
-        st.subheader("Upload Model File Manually")
+        st.subheader("Alternative: Upload Model File")
         uploaded_model = st.file_uploader("Upload sentiment_bestmodel.pt", type=['pt'])
         
         if uploaded_model is not None:
@@ -119,14 +60,13 @@ def main():
                 with open("sentiment_bestmodel.pt", "wb") as f:
                     f.write(uploaded_model.getbuffer())
                 
-                st.success("Model uploaded! Retrying load...")
-                st.rerun()
+                st.success("Model uploaded successfully! Please refresh the page.")
+                return
                 
             except Exception as upload_error:
                 st.error(f"Upload failed: {upload_error}")
         return
     
-    # Rest of your app code remains the same...
     # Create tabs for different functionalities
     tab1, tab2 = st.tabs(["Single Text Analysis", "Batch Analysis"])
     
@@ -176,7 +116,6 @@ def main():
         
         if uploaded_file is not None:
             try:
-                import pandas as pd
                 df = pd.read_csv(uploaded_file)
                 
                 if 'Text' not in df.columns:
@@ -233,6 +172,26 @@ def main():
             
             except Exception as e:
                 st.error(f"Error processing file: {e}")
+    
+    # Sidebar with information
+    with st.sidebar:
+        st.header("About")
+        st.markdown("""
+        This app uses a fine-tuned BERT model to analyze sentiment in text.
+        
+        **Sentiment Labels:**
+        - 😊 Positive
+        - 😐 Neutral  
+        - 😔 Negative
+        """)
+        
+        # Model status
+        st.header("Model Status")
+        if os.path.exists("sentiment_bestmodel.pt"):
+            file_size = os.path.getsize("sentiment_bestmodel.pt") / (1024 * 1024)
+            st.success(f"✅ Model loaded ({file_size:.1f} MB)")
+        else:
+            st.warning("❌ Model file not found locally")
 
 if __name__ == "__main__":
     main()
