@@ -16,7 +16,7 @@ st.set_page_config(
 @st.cache_resource
 def load_model():
     # Use the correct GitHub releases URL format
-    GITHUB_MODEL_URL = "https://github.com/Abdulbaset1/Customer-Feedback-Classification-Model/releases/download/v1/sentiment_bestmodel.pt"
+    GITHUB_MODEL_URL = "https://github.com/Abdulbaset1/Customer-Feedback-Classification-Model/releases/tag/v1/sentiment_bestmodel.pt"
     
     return SentimentAnalyzer(model_url=GITHUB_MODEL_URL, model_path="sentiment_bestmodel.pt")
 
