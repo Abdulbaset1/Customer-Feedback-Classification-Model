@@ -24,7 +24,7 @@ def load_model():
     return SentimentAnalyzer(model_url=GITHUB_MODEL_URL, model_path="sentiment_bestmodel.pt")
 
 def main():
-    st.title("📊 Sentiment Analysis App")
+    st.title("Sentiment Analysis App")
     st.markdown("Analyze the sentiment of your text using our fine-tuned BERT model!")
     
     # Model loading section
@@ -39,13 +39,13 @@ def main():
     
     # Load model
     try:
-        with st.spinner("🔄 Loading model..."):
+        with st.spinner("Loading model..."):
             if github_url and github_url != "https://github.com/your-username/your-repo/releases/download/v1/sentiment_bestmodel.pt":
                 analyzer = SentimentAnalyzer(model_url=github_url, model_path="sentiment_bestmodel.pt")
             else:
                 analyzer = load_model()
         
-        st.success("✅ Model loaded successfully!")
+        st.success("Model loaded successfully!")
         
         # Show model info
         st.sidebar.success(f"**Model Source:** {'GitHub Releases' if github_url else 'Local'}")
@@ -54,7 +54,7 @@ def main():
         
     except Exception as e:
         st.error(f"❌ Error loading model: {e}")
-        st.info("💡 **Troubleshooting tips:**")
+        st.info("**Troubleshooting tips:**")
         st.markdown("""
         1. Make sure your GitHub releases URL is correct
         2. Ensure the model file is publicly accessible
@@ -166,7 +166,7 @@ def main():
                         df['Sentiment'] = sentiments
                         df['Confidence'] = confidences
                         
-                        status_text.text("✅ Analysis complete!")
+                        status_text.text("Analysis complete!")
                         
                         # Show results
                         st.subheader("Analysis Results:")
@@ -224,7 +224,7 @@ def main():
         st.header("Model Status")
         if os.path.exists("sentiment_bestmodel.pt"):
             file_size = os.path.getsize("sentiment_bestmodel.pt") / (1024 * 1024)
-            st.success(f"✅ Model loaded ({file_size:.1f} MB)")
+            st.success(f"Model loaded ({file_size:.1f} MB)")
         else:
             st.warning("❌ Model file not found")
 
