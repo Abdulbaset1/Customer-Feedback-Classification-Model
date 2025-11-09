@@ -16,7 +16,7 @@ class SentimentAnalyzer:
                 self.download_model_from_url(model_url, model_path)
             else:
                 # Use the correct GitHub releases URL format
-                github_url = "https://github.com/Abdulbaset1/Customer-Feedback-Classification-Model/releases/download/v1/sentiment_bestmodel.pt"
+                github_url = "https://github.com/Abdulbaset1/Customer-Feedback-Classification-Model/releases/tag/v1/sentiment_bestmodel.pt"
                 self.download_model_from_url(github_url, model_path)
         
         # Load the trained weights with PyTorch 2.9 compatibility
