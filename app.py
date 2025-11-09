@@ -1,6 +1,6 @@
 import streamlit as st
 import torch
-from sentiment_model import SentimentAnalyzer
+from sentiment_model import SentimentAnalyzer  # REMOVED safe_load_model import
 import time
 import os
 import pandas as pd
@@ -61,7 +61,7 @@ def main():
                     f.write(uploaded_model.getbuffer())
                 
                 st.success("Model uploaded successfully! Please refresh the page.")
-                return
+                st.rerun()
                 
             except Exception as upload_error:
                 st.error(f"Upload failed: {upload_error}")
