@@ -1,6 +1,6 @@
 import streamlit as st
 import torch
-from sentiment_model import SentimentAnalyzer
+from sentiment_model import SentimentAnalyzer, safe_load_model
 import time
 import os
 
@@ -11,20 +11,60 @@ st.set_page_config(
     layout="wide"
 )
 
-# Initialize the model
+# Initialize the model with better error handling
 @st.cache_resource
 def load_model():
-    # You can specify your GitHub releases URL here
     # Replace with your actual GitHub releases URL
     GITHUB_MODEL_URL = "https://github.com/Abdulbaset1/Customer-Feedback-Classification-Model/releases/tag/v1/sentiment_bestmodel.pt"
     
-    # Alternative: If you want to use the raw URL (if you've uploaded to releases)
-    # GITHUB_MODEL_URL = "https://github.com/your-username/your-repo/releases/download/v1/sentiment_bestmodel.pt"
-    
-    return SentimentAnalyzer(model_url=GITHUB_MODEL_URL, model_path="sentiment_bestmodel.pt")
+    try:
+        # Try the main approach first
+        return SentimentAnalyzer(model_url=GITHUB_MODEL_URL, model_path="sentiment_bestmodel.pt")
+    except Exception as e:
+        st.error(f"Standard loading failed: {e}")
+        st.info("Trying alternative loading method...")
+        
+        # Fallback to safe loading
+        try:
+            model, tokenizer, device = safe_load_model(
+                "sentiment_bestmodel.pt", 
+                GITHUB_MODEL_URL
+            )
+            
+            # Create a custom analyzer instance
+            class FallbackAnalyzer:
+                def __init__(self, model, tokenizer, device):
+                    self.model = model
+                    self.tokenizer = tokenizer
+                    self.device = device
+                    self.label_map = {0: "negative", 1: "neutral", 2: "positive"}
+                
+                def predict(self, text):
+                    inputs = self.tokenizer(
+                        text,
+                        truncation=True,
+                        padding=True,
+                        max_length=128,
+                        return_tensors="pt"
+                    )
+                    
+                    inputs = {key: value.to(self.device) for key, value in inputs.items()}
+                    
+                    with torch.no_grad():
+                        outputs = self.model(**inputs)
+                        predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
+                    
+                    confidence, predicted_class = torch.max(predictions, dim=1)
+                    return self.label_map[predicted_class.item()], confidence.item()
+            
+            return FallbackAnalyzer(model, tokenizer, device)
+            
+        except Exception as fallback_error:
+            st.error(f"All loading methods failed: {fallback_error}")
+            raise fallback_error
 
 def main():
-    st.title("Sentiment Analysis App")
+    st.title("📊 Sentiment Analysis App")
     st.markdown("Analyze the sentiment of your text using our fine-tuned BERT model!")
     
     # Model loading section
@@ -32,48 +72,61 @@ def main():
     
     # Option to input custom GitHub URL
     github_url = st.sidebar.text_input(
-        "GitHub Model URL (optional):",
+        "GitHub Model URL:",
         value="https://github.com/your-username/your-repo/releases/download/v1/sentiment_bestmodel.pt",
         help="Paste the direct download URL from your GitHub releases"
     )
     
     # Load model
     try:
-        with st.spinner("Loading model..."):
-            if github_url and github_url != "https://github.com/your-username/your-repo/releases/download/v1/sentiment_bestmodel.pt":
-                analyzer = SentimentAnalyzer(model_url=github_url, model_path="sentiment_bestmodel.pt")
-            else:
-                analyzer = load_model()
+        with st.spinner("🔄 Loading model (PyTorch 2.6 compatibility mode)..."):
+            analyzer = load_model()
         
-        st.success("Model loaded successfully!")
+        st.success("✅ Model loaded successfully!")
         
         # Show model info
-        st.sidebar.success(f"**Model Source:** {'GitHub Releases' if github_url else 'Local'}")
-        if github_url:
-            st.sidebar.info(f"**URL:** {github_url}")
+        st.sidebar.success("**Model Status:** Loaded")
+        st.sidebar.info(f"**PyTorch Version:** {torch.__version__}")
         
     except Exception as e:
         st.error(f"❌ Error loading model: {e}")
-        st.info("**Troubleshooting tips:**")
-        st.markdown("""
-        1. Make sure your GitHub releases URL is correct
-        2. Ensure the model file is publicly accessible
-        3. Check your internet connection
-        4. Alternatively, upload the model file manually
-        """)
         
-        # Fallback: Allow manual upload
-        st.subheader("Alternative: Upload Model File")
-        uploaded_model = st.file_uploader("Upload your sentiment_bestmodel.pt file", type=['pt'])
+        # Detailed troubleshooting
+        st.subheader("🔧 Troubleshooting Steps")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("""
+            **Option 1: Update Model File**
+            - Re-save your model with PyTorch 2.6+
+            - Use `torch.save(model.state_dict(), 'model.pt', weights_only=True)`
+            """)
+            
+        with col2:
+            st.markdown("""
+            **Option 2: Manual Upload**
+            - Upload the model file directly
+            - Ensure it's from a trusted source
+            """)
+        
+        # Manual upload fallback
+        st.subheader("Upload Model File Manually")
+        uploaded_model = st.file_uploader("Upload sentiment_bestmodel.pt", type=['pt'])
         
         if uploaded_model is not None:
-            with open("sentiment_bestmodel.pt", "wb") as f:
-                f.write(uploaded_model.getbuffer())
-            st.success("Model uploaded successfully! Please refresh the page.")
-            return
-        else:
-            return
+            try:
+                with open("sentiment_bestmodel.pt", "wb") as f:
+                    f.write(uploaded_model.getbuffer())
+                
+                st.success("Model uploaded! Retrying load...")
+                st.rerun()
+                
+            except Exception as upload_error:
+                st.error(f"Upload failed: {upload_error}")
+        return
     
+    # Rest of your app code remains the same...
     # Create tabs for different functionalities
     tab1, tab2 = st.tabs(["Single Text Analysis", "Batch Analysis"])
     
@@ -91,7 +144,6 @@ def main():
         if st.button("Analyze Sentiment", type="primary"):
             if text_input.strip():
                 with st.spinner("Analyzing sentiment..."):
-                    # Add a small delay to show the spinner
                     time.sleep(0.5)
                     
                     # Get prediction
@@ -100,7 +152,6 @@ def main():
                     # Display results
                     st.subheader("Results:")
                     
-                    # Color-coded sentiment display
                     if sentiment == "positive":
                         st.success(f"**Sentiment:** {sentiment.upper()} 😊")
                     elif sentiment == "negative":
@@ -108,10 +159,7 @@ def main():
                     else:
                         st.info(f"**Sentiment:** {sentiment.upper()} 😐")
                     
-                    # Confidence meter
                     st.metric("Confidence", f"{confidence:.2%}")
-                    
-                    # Progress bar for confidence
                     st.progress(confidence, text=f"Confidence: {confidence:.2%}")
                     
             else:
@@ -120,7 +168,6 @@ def main():
     with tab2:
         st.header("Batch Analysis")
         
-        # File upload for batch processing
         uploaded_file = st.file_uploader(
             "Upload a CSV file with a 'Text' column",
             type=['csv'],
@@ -130,8 +177,6 @@ def main():
         if uploaded_file is not None:
             try:
                 import pandas as pd
-                
-                # Read the CSV file
                 df = pd.read_csv(uploaded_file)
                 
                 if 'Text' not in df.columns:
@@ -147,7 +192,6 @@ def main():
                         sentiments = []
                         confidences = []
                         
-                        # Process each text
                         for i, text in enumerate(df['Text']):
                             if pd.notna(text) and str(text).strip():
                                 sentiment, confidence = analyzer.predict(str(text))
@@ -157,22 +201,17 @@ def main():
                                 sentiments.append("unknown")
                                 confidences.append(0.0)
                             
-                            # Update progress
                             progress = (i + 1) / len(df)
                             progress_bar.progress(progress)
                             status_text.text(f"Processing {i + 1}/{len(df)} texts...")
                         
-                        # Add results to dataframe
                         df['Sentiment'] = sentiments
                         df['Confidence'] = confidences
                         
-                        status_text.text("Analysis complete!")
-                        
-                        # Show results
+                        status_text.text("✅ Analysis complete!")
                         st.subheader("Analysis Results:")
                         st.dataframe(df)
                         
-                        # Download button for results
                         csv = df.to_csv(index=False)
                         st.download_button(
                             label="Download Results as CSV",
@@ -181,7 +220,6 @@ def main():
                             mime="text/csv"
                         )
                         
-                        # Show summary statistics
                         st.subheader("Summary Statistics:")
                         sentiment_counts = df['Sentiment'].value_counts()
                         col1, col2, col3 = st.columns(3)
@@ -195,38 +233,6 @@ def main():
             
             except Exception as e:
                 st.error(f"Error processing file: {e}")
-    
-    # Sidebar with information
-    with st.sidebar:
-        st.header("About")
-        st.markdown("""
-        This app uses a fine-tuned BERT model to analyze sentiment in text.
-        
-        **Sentiment Labels:**
-        - 😊 Positive
-        - 😐 Neutral  
-        - 😔 Negative
-        
-        **Model Info:**
-        - Base Model: BERT-base-uncased
-        - Fine-tuned on custom dataset
-        - 3-class classification
-        - Loaded from GitHub Releases
-        """)
-        
-        st.header("How to Use")
-        st.markdown("""
-        1. **Single Text**: Enter text in the text area and click 'Analyze Sentiment'
-        2. **Batch Analysis**: Upload a CSV file with a 'Text' column for bulk analysis
-        """)
-        
-        # Model status
-        st.header("Model Status")
-        if os.path.exists("sentiment_bestmodel.pt"):
-            file_size = os.path.getsize("sentiment_bestmodel.pt") / (1024 * 1024)
-            st.success(f"Model loaded ({file_size:.1f} MB)")
-        else:
-            st.warning("❌ Model file not found")
 
 if __name__ == "__main__":
     main()
