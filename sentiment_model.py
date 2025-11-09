@@ -20,8 +20,16 @@ class SentimentAnalyzer:
                 github_url = "https://github.com/Abdulbaset1/Customer-Feedback-Classification-Model/releases/tag/v1/sentiment_bestmodel.pt"
                 self.download_model_from_url(github_url, model_path)
         
-        # Load the trained weights
-        self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+        # Load the trained weights with weights_only=False for PyTorch 2.6 compatibility
+        try:
+            # First try with weights_only=True (safer)
+            self.model.load_state_dict(torch.load(model_path, map_location=self.device, weights_only=True))
+        except Exception as e:
+            print(f"Loading with weights_only=True failed: {e}")
+            print("Trying with weights_only=False...")
+            # Fallback to weights_only=False for compatibility
+            self.model.load_state_dict(torch.load(model_path, map_location=self.device, weights_only=False))
+        
         self.model.to(self.device)
         self.model.eval()
         
@@ -39,7 +47,7 @@ class SentimentAnalyzer:
                 pass
             
             if st:
-                st.info("Downloading model from GitHub releases...")
+                st.info("📥 Downloading model from GitHub releases...")
             
             print(f"Downloading model from {url}")
             
@@ -69,7 +77,7 @@ class SentimentAnalyzer:
                             status_text.text(f"Downloaded {downloaded_size}/{total_size} bytes")
             
             if st:
-                st.success("Model downloaded successfully!")
+                st.success("✅ Model downloaded successfully!")
             
             print("Model downloaded successfully!")
             
@@ -102,5 +110,45 @@ class SentimentAnalyzer:
         
         return self.label_map[predicted_class.item()], confidence.item()
 
-# Create a global instance (optional, you can also create it in the app)
-# sentiment_analyzer = SentimentAnalyzer()
+# Alternative loader function for better error handling
+def safe_load_model(model_path, model_url=None):
+    """Safely load model with PyTorch 2.6 compatibility"""
+    import torch
+    from transformers import BertTokenizer, BertForSequenceClassification
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+    model = BertForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=3)
+    
+    # Download if needed
+    if not os.path.exists(model_path) and model_url:
+        analyzer = SentimentAnalyzer()
+        analyzer.download_model_from_url(model_url, model_path)
+    
+    # Try different loading strategies
+    try:
+        # Strategy 1: weights_only=True (safest)
+        state_dict = torch.load(model_path, map_location=device, weights_only=True)
+        model.load_state_dict(state_dict)
+        print("✅ Model loaded with weights_only=True")
+    except Exception as e1:
+        print(f"❌ Strategy 1 failed: {e1}")
+        try:
+            # Strategy 2: weights_only=False
+            state_dict = torch.load(model_path, map_location=device, weights_only=False)
+            model.load_state_dict(state_dict)
+            print("✅ Model loaded with weights_only=False")
+        except Exception as e2:
+            print(f"❌ Strategy 2 failed: {e2}")
+            try:
+                # Strategy 3: Load with specific pickle module (for older PyTorch versions)
+                state_dict = torch.load(model_path, map_location=device, pickle_module=torch.pickle)
+                model.load_state_dict(state_dict)
+                print("✅ Model loaded with custom pickle module")
+            except Exception as e3:
+                print(f"❌ Strategy 3 failed: {e3}")
+                raise Exception(f"All loading strategies failed: {e3}")
+    
+    model.to(device)
+    model.eval()
+    return model, tokenizer, device
