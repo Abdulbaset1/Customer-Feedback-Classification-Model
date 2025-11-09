@@ -1,6 +1,6 @@
 import streamlit as st
 import torch
-from sentiment_model import SentimentAnalyzer  # REMOVED safe_load_model import
+from sentiment_model import SentimentAnalyzer 
 import time
 import os
 import pandas as pd
