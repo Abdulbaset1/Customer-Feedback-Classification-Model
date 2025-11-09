@@ -21,7 +21,7 @@ def load_model():
     return SentimentAnalyzer(model_url=GITHUB_MODEL_URL, model_path="sentiment_bestmodel.pt")
 
 def main():
-    st.title("📊 Sentiment Analysis App")
+    st.title("Sentiment Analysis App")
     st.markdown("Analyze the sentiment of your text using our fine-tuned BERT model!")
     
     # Model loading section
@@ -29,10 +29,10 @@ def main():
     
     # Load model
     try:
-        with st.spinner("🔄 Loading model..."):
+        with st.spinner("Loading model..."):
             analyzer = load_model()
         
-        st.success("✅ Model loaded successfully!")
+        st.success("Model loaded successfully!")
         
         # Show model info
         st.sidebar.success("**Model Status:** Loaded")
