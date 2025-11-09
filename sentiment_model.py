@@ -40,7 +40,6 @@ class SentimentAnalyzer:
         try:
             # Fix the URL - the previous URL was incorrect
             # GitHub releases download URL should be in format: https://github.com/username/repo/releases/download/tag/filename
-            # Remove any incorrect parts from the URL
             if "releases/tag/" in url:
                 url = url.replace("releases/tag/", "releases/download/")
             
